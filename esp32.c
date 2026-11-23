@@ -39,7 +39,7 @@ static const char *TAG = "BMS_ESP32";
 #define LOW_BAT_CLEAR_SOC   18.0f
 #define HIGH_TEMP_WARN_C    45.0f
 #define HIGH_TEMP_CLEAR_C   43.0f
-#define LOOP_DELAY_MS       1250               /* +750 ms DS18B20 = ~2000 ms */
+#define BMS_CYCLE_PERIOD_MS 2000
 
 /* Data Structures */
 typedef struct {
@@ -109,6 +109,8 @@ static esp_err_t bms_adc_init(void)
 
 static esp_err_t bms_read_battery_voltage(bms_data_t *data)
 {
+    if (!data) return ESP_ERR_INVALID_ARG;
+
     int64_t sum_mv = 0;
     for (int i = 0; i < ADC_NUM_SAMPLES; i++) {
         int raw = 0;
@@ -154,7 +156,7 @@ static void ds18b20_init_gpio(void)
     gpio_config_t cfg = {
         .pin_bit_mask = (1ULL << DS18B20_GPIO),
         .mode = GPIO_MODE_INPUT_OUTPUT_OD,
-        .pull_up_en = GPIO_PULLUP_DISABLE,  /* External 4.7k pull-up used */
+        .pull_up_en = GPIO_PULLUP_ENABLE,   /* Internal pull-up enabled as backup */
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
@@ -164,15 +166,17 @@ static void ds18b20_init_gpio(void)
 
 static bool ow_reset(void)
 {
-    portENTER_CRITICAL(&s_ow_mux);
     gpio_set_level(DS18B20_GPIO, 0);
     esp_rom_delay_us(480);
+
+    portENTER_CRITICAL(&s_ow_mux);
     gpio_set_level(DS18B20_GPIO, 1);
     esp_rom_delay_us(70);
     int presence = (gpio_get_level(DS18B20_GPIO) == 0);
-    esp_rom_delay_us(410);
     portEXIT_CRITICAL(&s_ow_mux);
-    return presence;
+
+    esp_rom_delay_us(410);
+    return (presence != 0);
 }
 
 static void ow_write_bit(uint8_t bit)
@@ -182,13 +186,14 @@ static void ow_write_bit(uint8_t bit)
     if (bit) {
         esp_rom_delay_us(6);
         gpio_set_level(DS18B20_GPIO, 1);
+        portEXIT_CRITICAL(&s_ow_mux);
         esp_rom_delay_us(64);
     } else {
         esp_rom_delay_us(60);
         gpio_set_level(DS18B20_GPIO, 1);
+        portEXIT_CRITICAL(&s_ow_mux);
         esp_rom_delay_us(10);
     }
-    portEXIT_CRITICAL(&s_ow_mux);
 }
 
 static uint8_t ow_read_bit(void)
@@ -200,8 +205,8 @@ static uint8_t ow_read_bit(void)
     gpio_set_level(DS18B20_GPIO, 1);
     esp_rom_delay_us(9);
     bit = (uint8_t)gpio_get_level(DS18B20_GPIO);
-    esp_rom_delay_us(55);
     portEXIT_CRITICAL(&s_ow_mux);
+    esp_rom_delay_us(55);
     return bit;
 }
 
@@ -238,6 +243,8 @@ static uint8_t ds18b20_crc8(const uint8_t *buf, size_t len)
 
 static esp_err_t ds18b20_read_temp(float *temp_c)
 {
+    if (!temp_c) return ESP_ERR_INVALID_ARG;
+
     if (!ow_reset()) return ESP_ERR_NOT_FOUND;
     ow_write_byte(0xCC);  /* Skip ROM */
     ow_write_byte(0x44);  /* Convert T (12-bit default) */
@@ -289,9 +296,22 @@ static esp_err_t ssd1306_init(void)
     if (err != ESP_OK) return err;
 
     static const uint8_t init_cmds[] = {
-        0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40,
-        0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8, 0xDA, 0x12,
-        0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF
+        0xAE,         /* Display OFF */
+        0xD5, 0x80,   /* Set Display Clock Divide Ratio */
+        0xA8, 0x3F,   /* Set Multiplex Ratio (1 to 64) */
+        0xD3, 0x00,   /* Set Display Offset */
+        0x40,         /* Set Display Start Line */
+        0x8D, 0x14,   /* Enable Charge Pump */
+        0x20, 0x02,   /* Set Memory Addressing Mode: Page Addressing Mode */
+        0xA1,         /* Set Segment Re-map */
+        0xC8,         /* Set COM Output Scan Direction */
+        0xDA, 0x12,   /* Set COM Pins Hardware Configuration */
+        0x81, 0xCF,   /* Set Contrast Control */
+        0xD9, 0xF1,   /* Set Pre-charge Period */
+        0xDB, 0x40,   /* Set VCOMH Deselect Level */
+        0xA4,         /* Entire Display ON (Resume to RAM) */
+        0xA6,         /* Set Normal Display */
+        0xAF          /* Display ON */
     };
     for (size_t i = 0; i < sizeof(init_cmds); i++) {
         err = ssd1306_write_cmd(init_cmds[i]);
@@ -311,17 +331,22 @@ static void get_glyph_5x7(char c, uint8_t g[5])
         {'6',{0x3C,0x4A,0x49,0x49,0x30}}, {'7',{0x01,0x71,0x09,0x05,0x03}},
         {'8',{0x36,0x49,0x49,0x49,0x36}}, {'9',{0x06,0x49,0x49,0x29,0x1E}},
         {'A',{0x7E,0x11,0x11,0x11,0x7E}}, {'B',{0x7F,0x49,0x49,0x49,0x36}},
-        {'C',{0x3E,0x41,0x41,0x41,0x22}}, {'E',{0x7F,0x49,0x49,0x49,0x41}},
-        {'H',{0x7F,0x08,0x08,0x08,0x7F}}, {'I',{0x00,0x41,0x7F,0x41,0x00}},
+        {'C',{0x3E,0x41,0x41,0x41,0x22}}, {'D',{0x7F,0x41,0x41,0x22,0x1C}},
+        {'E',{0x7F,0x49,0x49,0x49,0x41}}, {'F',{0x7F,0x09,0x09,0x09,0x01}},
+        {'G',{0x3E,0x41,0x49,0x49,0x7A}}, {'H',{0x7F,0x08,0x08,0x08,0x7F}},
+        {'I',{0x00,0x41,0x7F,0x41,0x00}}, {'J',{0x20,0x40,0x41,0x3F,0x01}},
         {'K',{0x7F,0x08,0x14,0x22,0x41}}, {'L',{0x7F,0x40,0x40,0x40,0x40}},
         {'M',{0x7F,0x02,0x0C,0x02,0x7F}}, {'N',{0x7F,0x04,0x08,0x10,0x7F}},
         {'O',{0x3E,0x41,0x41,0x41,0x3E}}, {'P',{0x7F,0x09,0x09,0x09,0x06}},
-        {'R',{0x7F,0x09,0x19,0x29,0x46}}, {'S',{0x46,0x49,0x49,0x49,0x31}},
-        {'T',{0x01,0x01,0x7F,0x01,0x01}}, {'U',{0x3F,0x40,0x40,0x40,0x3F}},
-        {'V',{0x1F,0x20,0x40,0x20,0x1F}}, {'W',{0x3F,0x40,0x38,0x40,0x3F}},
+        {'Q',{0x3E,0x41,0x51,0x21,0x5E}}, {'R',{0x7F,0x09,0x19,0x29,0x46}},
+        {'S',{0x46,0x49,0x49,0x49,0x31}}, {'T',{0x01,0x01,0x7F,0x01,0x01}},
+        {'U',{0x3F,0x40,0x40,0x40,0x3F}}, {'V',{0x1F,0x20,0x40,0x20,0x1F}},
+        {'W',{0x3F,0x40,0x38,0x40,0x3F}}, {'X',{0x63,0x14,0x08,0x14,0x63}},
+        {'Y',{0x07,0x08,0x70,0x08,0x07}}, {'Z',{0x61,0x51,0x49,0x45,0x43}},
         {'.',{0x00,0x60,0x60,0x00,0x00}}, {':',{0x00,0x36,0x36,0x00,0x00}},
         {'%',{0x23,0x13,0x08,0x64,0x62}}, {'+',{0x08,0x08,0x3E,0x08,0x08}},
-        {'-',{0x08,0x08,0x08,0x08,0x08}}, {'!',{0x00,0x00,0x5F,0x00,0x00}}
+        {'-',{0x08,0x08,0x08,0x08,0x08}}, {'/',{0x20,0x10,0x08,0x04,0x02}},
+        {'=',{0x14,0x14,0x14,0x14,0x14}}, {'!',{0x00,0x00,0x5F,0x00,0x00}}
     };
     for (size_t i = 0; i < sizeof(font) / sizeof(font[0]); i++) {
         if (font[i].ch == c) {
@@ -422,6 +447,9 @@ void app_main(void)
     bms_data_t bms = {0};
     ESP_LOGI(TAG, "Battery Monitoring System initialized");
 
+    TickType_t last_wake_time = xTaskGetTickCount();
+    const TickType_t period_ticks = pdMS_TO_TICKS(BMS_CYCLE_PERIOD_MS);
+
     while (1) {
         if (bms_read_battery_voltage(&bms) == ESP_OK) {
             bms.soc_pct = bms_estimate_soc(bms.battery_voltage_v);
@@ -449,6 +477,6 @@ void app_main(void)
             ESP_LOGW(TAG, "ALERT: High battery temperature detected!");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));
+        vTaskDelayUntil(&last_wake_time, period_ticks);
     }
 }

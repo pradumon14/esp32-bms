@@ -1,0 +1,8 @@
+# ESP-IDF Target Configuration
+CONFIG_IDF_TARGET="esp32"
+
+# FreeRTOS 1000 Hz Tick Rate (1 ms tick resolution)
+CONFIG_FREERTOS_HZ=1000
+
+# ADC Calibration Scheme Support
+CONFIG_ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED=y
