@@ -1,5 +1,3 @@
-\begin{lstlisting}[caption={ESP-IDF C Firmware (\texttt{main/main.c})}, label={lst:main_c}]
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
