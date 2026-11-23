@@ -14,7 +14,7 @@
 
 ---
 
-## 📌 Executive Summary
+## Executive Summary
 
 Rechargeable single-cell Lithium-ion (Li-ion) batteries (3.7 V nominal, 4.2 V peak) are the standard power source for portable consumer gadgets, IoT sensor nodes, and embedded prototypes. Operating a cell outside its safe electrical and thermal boundary causes rapid irreversible capacity decay, internal copper dissolution below 3.0 V, and thermal runaway hazards above 45 °C.
 
@@ -31,7 +31,7 @@ The system performs:
 
 ---
 
-## 🎯 Engineering Problem Statement
+## Engineering Problem Statement
 
 Small-scale embedded devices powered by single-cell Li-ion batteries typically suffer from four critical challenges:
 
@@ -42,7 +42,7 @@ Small-scale embedded devices powered by single-cell Li-ion batteries typically s
 
 ---
 
-## ⚙️ System Architecture
+## System Architecture
 
 ```
                       +-----------------------------------+
@@ -85,7 +85,7 @@ Small-scale embedded devices powered by single-cell Li-ion batteries typically s
 
 ---
 
-## 🔌 Hardware Pin Mapping & Circuit Schematic
+## Hardware Pin Mapping & Circuit Schematic
 
 ### Pin Allocation Table
 
@@ -121,7 +121,7 @@ Small-scale embedded devices powered by single-cell Li-ion batteries typically s
 
 ---
 
-## 📐 Mathematical Foundations
+## Mathematical Foundations
 
 ### 1. Voltage Divider & Battery Reconstruction
 The continuous divider attenuation ratio is:
@@ -155,7 +155,7 @@ $$\text{SOC} = \text{SOC}_i + \left(\frac{V_{\text{battery}} - V_i}{V_{i+1} - V_
 
 ---
 
-## 🖥️ OLED User Interface & Alert States
+## OLED User Interface & Alert States
 
 The SSD1306 OLED displays four status pages updated at each 2-second cycle:
 
@@ -184,7 +184,7 @@ The SSD1306 OLED displays four status pages updated at each 2-second cycle:
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 esp32-bms/
@@ -203,7 +203,7 @@ esp32-bms/
 
 ---
 
-## 🛠️ Build and Flashing Instructions
+## Build and Flashing Instructions
 
 ### Prerequisites
 * [ESP-IDF v5.x](https://docs.espressif.com/projects/esp-idf/en/v5.3/esp32/get-started/) installed and environment variables exported (`. $HOME/esp/esp-idf/export.sh`).
@@ -237,7 +237,7 @@ The output PDF is generated as `main.pdf` (and mirrors `BMS project.pdf`).
 
 ---
 
-## 🧪 Planned Validation Protocol
+## Planned Validation Protocol
 
 | Validation Test | Input Stimulus | Acceptance Criterion | Verification Status |
 | :--- | :--- | :--- | :---: |
@@ -249,7 +249,7 @@ The output PDF is generated as `main.pdf` (and mirrors `BMS project.pdf`).
 
 ---
 
-## 🚀 Future Roadmap
+## Future Roadmap
 
 1. **Precision Current Sensing:** Integrate an INA226/INA219 I2C current sensor across a low-side shunt to implement Coulomb counting and Coulomb-OCV hybrid estimation.
 2. **IoT Wireless Telemetry:** Transmit real-time telemetry over Wi-Fi/MQTT or BLE to a dashboard (e.g., Home Assistant or mobile app).
@@ -258,7 +258,7 @@ The output PDF is generated as `main.pdf` (and mirrors `BMS project.pdf`).
 
 ---
 
-## 📄 Academic Attribution & License
+## Academic Attribution & License
 
 * **Project:** Battery Monitoring System Using ESP32 and C Firmware
 * **Author:** Pradumon Sahani
